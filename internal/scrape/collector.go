@@ -28,7 +28,7 @@ func getProxyFunc(proxyService *socks5.Service) (colly.ProxyFunc, error) {
 	}
 	return proxyFunc, nil
 }
-
+//BuildCollector ...
 func BuildCollector() *colly.Collector {
 	collector := colly.NewCollector(
 		colly.AllowURLRevisit(),

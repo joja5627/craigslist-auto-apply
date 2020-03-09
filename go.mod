@@ -1,6 +1,6 @@
 module craigslist-auto-apply
 
-go 1.12
+go 1.14
 
 require (
 	github.com/PuerkitoBio/goquery v1.5.1 // indirect
@@ -11,6 +11,7 @@ require (
 	github.com/aws/aws-lambda-go v1.15.0 // indirect
 	github.com/corpix/uarand v0.1.1
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/gin-gonic/gin v1.5.0
 	github.com/globalsign/mgo v0.0.0-20181015135952-eeefdecb41b8
 	github.com/go-redis/redis v6.15.7+incompatible
 	github.com/gobwas/glob v0.2.3 // indirect
@@ -34,5 +35,6 @@ require (
 	github.com/tj/assert v0.0.0-20190920132354-ee03d75cd160 // indirect
 	golang.org/x/crypto v0.0.0-20200302210943-78000ba7a073
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
+	google.golang.org/api v0.20.0
 	google.golang.org/appengine v1.6.5 // indirect
 )
