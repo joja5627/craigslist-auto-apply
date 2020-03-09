@@ -1,11 +1,11 @@
 package main
 
 import (
+	"craigslist-auto-apply/internal/scrape"
 	"encoding/base64"
 	"fmt"
 	"github.com/gocolly/colly"
 	"github.com/gorilla/websocket"
-	"craigslist-auto-apply/internal/scrape"
 	"google.golang.org/api/gmail/v1"
 	"net/http"
 	"net/url"
@@ -92,20 +92,22 @@ func main() {
 		c.Visit(fmt.Sprintf("%s/search/sof?employment_type=3", stateOrg))
 	}
 	c.Wait()
-	//contactInfos := scrape.GetContactInfos()
+	contactInfos := scrape.GetContactInfos()
+	fmt.Println(len(contactInfos))
 	//for _, contactURL := range contactInfos {
 	//	infoRESP, err := http.Get(contactURL)
+	//	htmlData, err := ioutil.ReadAll(infoRESP.Body)
+	//	if err != nil {
+	//		jsonListing, _ := json.Marshal(listing)
+	//		body := map[string]string{"status": fmt.Sprintf("%d", http.StatusBadRequest),
+	//			"statusText": http.StatusText(http.StatusBadRequest),
+	//			"body":       string(jsonListing)}
+	//		c.JSON(http.StatusBadRequest, body)
+	//		return
+	//	}
 	//
 	//}
-	//htmlData, err := ioutil.ReadAll(infoRESP.Body)
-	//if err != nil {
-	//	jsonListing, _ := json.Marshal(listing)
-	//	body := map[string]string{"status": fmt.Sprintf("%d", http.StatusBadRequest),
-	//		"statusText": http.StatusText(http.StatusBadRequest),
-	//		"body":       string(jsonListing)}
-	//	c.JSON(http.StatusBadRequest, body)
-	//	return
-	//}
+
 	//
 	//if htmlData == nil {
 	//	jsonListing, _ := json.Marshal(listing)

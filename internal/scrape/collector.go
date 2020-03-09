@@ -74,7 +74,11 @@ func BuildCollector() *colly.Collector {
 	})
 
 	collector.OnResponse(func(r *colly.Response) {
-
+		//fmt.Println("======")
+		//fmt.Println(r.Request)
+		//fmt.Println(r.StatusCode)
+		//fmt.Println(r.Body)
+		//fmt.Println("======")
 	})
 
 	return collector
