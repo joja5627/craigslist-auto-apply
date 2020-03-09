@@ -5,7 +5,7 @@ import (
 	"github.com/corpix/uarand"
 	"github.com/gocolly/colly"
 	"github.com/gocolly/colly/proxy"
-	"github.com/joja5627/craigslist-auto-apply/internal/socks5"
+	"craigslist-auto-apply/internal/socks5"
 	"regexp"
 	"strings"
 	"time"

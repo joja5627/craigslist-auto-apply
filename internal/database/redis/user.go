@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
-	"github.com/joja5627/craigslist-auto-apply/internal/user"
+	"craigslist-auto-apply/internal/user"
 )
 
 const userTable = "users"
@@ -19,7 +19,8 @@ func NewRedisUserRepository(connection *redis.Client) user.UserRepo {
 	}
 }
 
-func (r *userRepository) CreateAccount(account *user.Account) error {
+
+func (r *userRepository) CreateAccount(account *user.Account) error{
 
 	logrus.Infof("Account %v", account)
 	encoded, err := json.Marshal(account)
@@ -36,7 +37,7 @@ func (r *userRepository) CreateAccount(account *user.Account) error {
 	return nil
 }
 
-func (r *userRepository) GetUser(username string) (*user.Account, error) {
+func (r *userRepository) GetUser(username string) (*user.Account, error){
 	b, err := r.connection.HGet(userTable, username).Bytes()
 
 	if err != nil {

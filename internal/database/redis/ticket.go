@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"github.com/go-redis/redis"
 	"github.com/sirupsen/logrus"
-	"github.com/joja5627/craigslist-auto-apply/internal/ticket"
+	"craigslist-auto-apply/internal/ticket"
 )
 
 const ticketTable = "tickets"

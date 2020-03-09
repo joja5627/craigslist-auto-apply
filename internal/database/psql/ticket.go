@@ -2,7 +2,7 @@ package psql
 
 import (
 	"database/sql"
-	"github.com/joja5627/craigslist-auto-apply/internal/ticket"
+	"craigslist-auto-apply/internal/ticket"
 	"log"
 
 	_ "github.com/lib/pq"

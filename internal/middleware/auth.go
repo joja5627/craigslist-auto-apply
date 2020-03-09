@@ -5,7 +5,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/context"
 	"github.com/sirupsen/logrus"
-	"github.com/joja5627/craigslist-auto-apply/internal/env"
+	"craigslist-auto-apply/internal/env"
 	"net/http"
 	"strings"
 )
@@ -35,7 +35,7 @@ func Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid  {
 			userId := claims["sub"].(string)
 			context.Set(r, "id", userId)
 			context.Set(r, "authType", claims["type"].(string))
@@ -47,3 +47,5 @@ func Authenticate(next http.Handler) http.Handler {
 		}
 	})
 }
+
+
