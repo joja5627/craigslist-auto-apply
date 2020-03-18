@@ -88,10 +88,12 @@ func main() {
 		stateOrg := fmt.Sprintf("https://%s.craigslist.org", state)
 		time.Sleep(10 * time.Millisecond)
 		c.Visit(fmt.Sprintf("%s/d/software-qa-dba-etc/search/sof", stateOrg))
-		time.Sleep(10 * time.Millisecond)
-		c.Visit(fmt.Sprintf("%s/search/sof?employment_type=3", stateOrg))
+		//c.Wait()
+		//time.Sleep(10 * time.Millisecond)
+		//c.Visit(fmt.Sprintf("%s/search/sof?employment_type=3", stateOrg))
+		//c.Wait()
 	}
-	c.Wait()
+
 	contactInfos := scrape.GetContactInfos()
 	fmt.Println(len(contactInfos))
 	//for _, contactURL := range contactInfos {
