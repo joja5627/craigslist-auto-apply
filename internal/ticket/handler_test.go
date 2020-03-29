@@ -2,9 +2,10 @@ package ticket_test
 
 import (
 	"bytes"
+	"craigslist-auto-apply/internal/mocks"
+	"craigslist-auto-apply/internal/ticket"
 	"encoding/json"
-	"craigslist-auto-apply/internal/mocksnal/mocks"
-	"craigslist-auto-apply/internal/ticketal/ticket"
+
 	"net/http"
 	"net/http/httptest"
 	"testing"

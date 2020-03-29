@@ -1,0 +1,7 @@
+#https://github.com/donvito/learngo/tree/master/mongo-microservice
+version: "3"
+services:
+  mongodb:
+    image: mongo
+    ports:
+      - "27017:27017"

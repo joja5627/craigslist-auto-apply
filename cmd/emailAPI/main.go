@@ -1,130 +1,168 @@
 package main
+
 import (
-"encoding/base64"
-"encoding/json"
-"fmt"
-"golang.org/x/net/context"
-"golang.org/x/oauth2"
-"golang.org/x/oauth2/google"
-"google.golang.org/api/gmail/v1"
-"io/ioutil"
-"log"
-"net/http"
-"net/url"
-"os"
-"os/user"
-"path/filepath"
-"strings"
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"go.skia.org/infra/go/auth"
+	"go.skia.org/infra/go/httputils"
+	"go.skia.org/infra/go/sklog"
+	"go.skia.org/infra/go/util"
+	gmail "google.golang.org/api/gmail/v1"
+	"html/template"
+	"io"
+	"io/ioutil"
+	"strings"
+	ttemplate "text/template"
 )
-
-// getClient uses a Context and Config to retrieve a Token
-// then generate a Client. It returns the generated Client.
-func getClient(ctx context.Context, config *oauth2.Config) *http.Client {
-cacheFile, err := tokenCacheFile()
-if err != nil {
-log.Fatalf("Unable to get path to cached credential file. %v", err)
+var (
+	viewActionMarkupTemplate string = `
+<div itemscope itemtype="http://schema.org/EmailMessage">
+  <div itemprop="potentialAction" itemscope itemtype="http://schema.org/ViewAction">
+    <link itemprop="target" href="{{.Link}}"/>
+    <meta itemprop="name" content="{{.Name}}"/>
+  </div>
+  <meta itemprop="description" content="{{.Description}}"/>
+</div>
+`
+	emailTemplate string = `From: {{.From}}
+To: {{.To}}
+Subject: {{.Subject}}
+Content-Type: text/html; charset=UTF-8
+<html>
+<body>
+{{.Markup}}
+{{.Body}}
+</body>
+</html>
+`
+	viewActionMarkupTemplateParsed *template.Template  = nil
+	emailTemplateParsed            *ttemplate.Template = nil
+)
+func init() {
+	viewActionMarkupTemplateParsed = template.Must(template.New("view_action").Parse(viewActionMarkupTemplate))
+	emailTemplateParsed = ttemplate.Must(ttemplate.New("email").Parse(emailTemplate))
 }
-tok, err := tokenFromFile(cacheFile)
-if err != nil {
-tok = getTokenFromWeb(config)
-saveToken(cacheFile, tok)
+// GMail is an object used for authenticating to the GMail API server.
+type GMail struct {
+	service *gmail.Service
 }
-return config.Client(ctx, tok)
+// Message represents a single email message.
+type Message struct {
+	SenderDisplayName string
+	To                []string
+	Subject           string
+	Body              string
 }
-
-// getTokenFromWeb uses Config to request a Token.
-// It returns the retrieved Token.
-func getTokenFromWeb(config *oauth2.Config) *oauth2.Token {
-authURL := config.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-fmt.Printf("Go to the following link in your browser then type the "+
-"authorization code: \n%v\n", authURL)
-
-var code string
-if _, err := fmt.Scan(&code); err != nil {
-log.Fatalf("Unable to read authorization code %v", err)
+// GetViewActionMarkup returns a string that contains the required markup.
+func GetViewActionMarkup(link, name, description string) (string, error) {
+	markupBytes := new(bytes.Buffer)
+	if err := viewActionMarkupTemplateParsed.Execute(markupBytes, struct {
+		Link        string
+		Name        string
+		Description string
+	}{
+		Link:        link,
+		Name:        name,
+		Description: description,
+	}); err != nil {
+		return "", fmt.Errorf("Could not execute template: %v", err)
+	}
+	return markupBytes.String(), nil
 }
-
-tok, err := config.Exchange(oauth2.NoContext, code)
-if err != nil {
-log.Fatalf("Unable to retrieve token from web %v", err)
+// NewGMail returns a new GMail object which is authorized to send email.
+func NewGMail(clientId, clientSecret, tokenCacheFile string) (*GMail, error) {
+	ts, err := auth.NewTokenSourceFromIdAndSecret(clientId, clientSecret, tokenCacheFile, gmail.GmailComposeScope)
+	if err != nil {
+		return nil, err
+	}
+	client := httputils.DefaultClientConfig().WithTokenSource(ts).With2xxOnly().Client()
+	service, err := gmail.New(client)
+	if err != nil {
+		return nil, err
+	}
+	return &GMail{
+		service: service,
+	}, nil
 }
-return tok
+// ClientSecrets is the structure of a client_secrets.json file that contains info on an installed client.
+type ClientSecrets struct {
+	Installed ClientConfig `json:"installed"`
 }
-
-// tokenCacheFile generates credential file path/filename.
-// It returns the generated credential path/filename.
-func tokenCacheFile() (string, error) {
-usr, err := user.Current()
-if err != nil {
-return "", err
+type ClientConfig struct {
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
 }
-tokenCacheDir := filepath.Join(usr.HomeDir, ".credentials")
-os.MkdirAll(tokenCacheDir, 0700)
-return filepath.Join(tokenCacheDir,
-url.QueryEscape("gmail-go-quickstart.json")), err
+// NewFromFiles creates a new GMail object authorized from the given files.
+//
+// Creates a copy of the token cache file in /tmp since mounted secrets are read-only.
+func NewFromFiles(emailTokenCacheFile, emailClientSecretsFile string) (*GMail, error) {
+	var clientSecrets ClientSecrets
+	err := util.WithReadFile(emailClientSecretsFile, func(f io.Reader) error {
+		return json.NewDecoder(f).Decode(&clientSecrets)
+	})
+	if err != nil {
+		sklog.Fatalf("Failed to read client secrets from %q: %s", emailClientSecretsFile, err)
+	}
+	// Create a copy of the token cache file since mounted secrets are read-only.
+	fout, err := ioutil.TempFile("", "")
+	if err != nil {
+		sklog.Fatalf("Unable to create temp file %q: %s", fout.Name(), err)
+	}
+	err = util.WithReadFile(emailTokenCacheFile, func(fin io.Reader) error {
+		_, err := io.Copy(fout, fin)
+		if err != nil {
+			err = fout.Close()
+		}
+		return err
+	})
+	if err != nil {
+		sklog.Fatalf("Failed to write token cache file from %q to %q: %s", emailTokenCacheFile, fout.Name(), err)
+	}
+	emailTokenCacheFile = fout.Name()
+	return NewGMail(clientSecrets.Installed.ClientID, clientSecrets.Installed.ClientSecret, emailTokenCacheFile)
 }
-
-// tokenFromFile retrieves a Token from a given file path.
-// It returns the retrieved Token and any read error encountered.
-func tokenFromFile(file string) (*oauth2.Token, error) {
-f, err := os.Open(file)
-if err != nil {
-return nil, err
+// Send an email.
+func (a *GMail) Send(senderDisplayName string, to []string, subject string, body string) error {
+	return a.SendWithMarkup(senderDisplayName, to, subject, body, "")
 }
-t := &oauth2.Token{}
-err = json.NewDecoder(f).Decode(t)
-defer f.Close()
-return t, err
+// Send an email with gmail markup.
+// Documentation about markups supported in gmail are here: https://developers.google.com/gmail/markup/
+// A go-to action example is here: https://developers.google.com/gmail/markup/reference/go-to-action
+func (a *GMail) SendWithMarkup(senderDisplayName string, to []string, subject string, body string, markup string) error {
+	sender := "me"
+	// Get email address to use in the from section.
+	profile, err := a.service.Users.GetProfile(sender).Do()
+	if err != nil {
+		return fmt.Errorf("Failed to get profile for %s: %v", sender, err)
+	}
+	fromWithName := fmt.Sprintf("%s <%s>", senderDisplayName, profile.EmailAddress)
+	msgBytes := new(bytes.Buffer)
+	if err := emailTemplateParsed.Execute(msgBytes, struct {
+		From    template.HTML
+		To      string
+		Subject string
+		Body    template.HTML
+		Markup  template.HTML
+	}{
+		From:    template.HTML(fromWithName),
+		To:      strings.Join(to, ","),
+		Subject: subject,
+		Body:    template.HTML(body),
+		Markup:  template.HTML(markup),
+	}); err != nil {
+		return fmt.Errorf("Failed to send email; could not execute template: %v", err)
+	}
+	sklog.Infof("Message to send: %q", msgBytes.String())
+	msg := gmail.Message{}
+	msg.SizeEstimate = int64(msgBytes.Len())
+	msg.Snippet = subject
+	msg.Raw = base64.URLEncoding.EncodeToString(msgBytes.Bytes())
+	_, err = a.service.Users.Messages.Send(sender, &msg).Do()
+	return err
 }
-
-// saveToken uses a file path to create a file and store the
-// token in it.
-func saveToken(file string, token *oauth2.Token) {
-fmt.Printf("Saving credential file to: %s\n", file)
-f, err := os.Create(file)
-if err != nil {
-log.Fatalf("Unable to cache oauth token: %v", err)
-}
-defer f.Close()
-json.NewEncoder(f).Encode(token)
-}
-
-func main() {
-ctx := context.Background()
-
-b, err := ioutil.ReadFile("credentials.json")
-if err != nil {
-log.Fatalf("Unable to read client secret file: %v", err)
-}
-
-config, err := google.ConfigFromJSON(b, gmail.MailGoogleComScope)
-if err != nil {
-log.Fatalf("Unable to parse client secret file to config: %v", err)
-}
-client := getClient(ctx, config)
-
-srv, err := gmail.New(client)
-if err != nil {
-log.Fatalf("Unable to retrieve gmail Client %v", err)
-}
-
-var message gmail.Message
-
-temp := []byte("From: 'me'\r\n" +
-"To:  joja5627@gmail.com\r\n" +
-"Subject: Software Position \r\n" +
-"\r\nHey! My name is Joe Jackson and I'm interested in applying for the position you posted on craigs list." +
-	" This is a link to my most up to date resume https://docs.google.com/document/d/1ugz6WqXaWEj2s4CLRC5ecz40RiRUmfC9XxmvW-TSXwA/edit?usp=sharing "+
-	"\r\nBest," + "\r\nJoe Jackson")
-
-message.Raw = base64.StdEncoding.EncodeToString(temp)
-message.Raw = strings.Replace(message.Raw, "/", "_", -1)
-message.Raw = strings.Replace(message.Raw, "+", "-", -1)
-message.Raw = strings.Replace(message.Raw, "=", "", -1)
-
-_, err = srv.Users.Messages.Send("me", &message).Do()
-if err != nil {
-log.Fatalf("Unable to send. %v", err)
-}
-
+// SendMessage sends the given Message.
+func (a *GMail) SendMessage(msg *Message) error {
+	return a.Send(msg.SenderDisplayName, msg.To, msg.Subject, msg.Body)
 }

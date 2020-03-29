@@ -1,19 +1,26 @@
 package main
 
 import (
+	"craigslist-auto-apply/internal"
 	"craigslist-auto-apply/internal/scrape"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/gocolly/colly"
 	"github.com/gorilla/websocket"
 	"google.golang.org/api/gmail/v1"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
+	"github.com/googollee/go-socket.io"
+
 )
 
 var (
+	listings   []string
 	newline    = []byte{'\n'}
 	space      = []byte{' '}
 	stateCodes = []string{"auburn", "bham", "dothan", "shoals", "gadsden", "huntsville", "mobile", "montgomery", "tuscaloosa", "anchorage", "fairbanks", "kenai", "juneau", "flagstaff", "mohave", "phoenix", "prescott", "showlow", "sierravista", "tucson", "yuma", "fayar", "fortsmith", "jonesboro", "littlerock", "texarkana", "bakersfield", "chico", "fresno", "goldcountry", "hanford", "humboldt", "imperial", "inlandempire", "losangeles", "mendocino", "merced", "modesto", "monterey", "orangecounty", "palmsprings", "redding", "sacramento", "sandiego", "sfbay", "slo", "santabarbara", "santamaria", "siskiyou", "stockton", "susanville", "ventura", "visalia", "yubasutter", "boulder", "cosprings", "denver", "eastco", "fortcollins", "rockies", "pueblo", "westslope", "newlondon", "hartford", "newhaven", "nwct", "delaware", "washingtondc", "miami", "daytona", "keys", "fortlauderdale", "fortmyers", "gainesville", "cfl", "jacksonville", "lakeland", "miami", "lakecity", "ocala", "okaloosa", "orlando", "panamacity", "pensacola", "sarasota", "miami", "spacecoast", "staugustine", "tallahassee", "tampa", "treasure", "miami", "albanyga", "athensga", "atlanta", "augusta", "brunswick", "columbusga", "macon", "nwga", "savannah", "statesboro", "valdosta", "honolulu", "boise", "eastidaho", "lewiston", "twinfalls", "bn", "chambana", "chicago", "decatur", "lasalle", "mattoon", "peoria", "rockford", "carbondale", "springfieldil", "quincy", "bloomington", "evansville", "fortwayne", "indianapolis", "kokomo", "tippecanoe", "muncie", "richmondin", "southbend", "terrehaute", "ames", "cedarrapids", "desmoines", "dubuque", "fortdodge", "iowacity", "masoncity", "quadcities", "siouxcity", "ottumwa", "waterloo", "lawrence", "ksu", "nwks", "salina", "seks", "swks", "topeka", "wichita", "bgky", "eastky", "lexington", "louisville", "owensboro", "westky", "batonrouge", "cenla", "houma", "lafayette", "lakecharles", "monroe", "neworleans", "shreveport", "maine", "annapolis", "baltimore", "easternshore", "frederick", "smd", "westmd", "boston", "capecod", "southcoast", "westernmass", "worcester", "annarbor", "battlecreek", "centralmich", "detroit", "flint", "grandrapids", "holland", "jxn", "kalamazoo", "lansing", "monroemi", "muskegon", "nmi", "porthuron", "saginaw", "swmi", "thumb", "up", "bemidji", "brainerd", "duluth", "mankato", "minneapolis", "rmn", "marshall", "stcloud", "gulfport", "hattiesburg", "jackson", "meridian", "northmiss", "natchez", "columbiamo", "joplin", "kansascity", "kirksville", "loz", "semo", "springfield", "stjoseph", "stlouis", "billings", "bozeman", "butte", "greatfalls", "helena", "kalispell", "missoula", "montana", "grandisland", "lincoln", "northplatte", "omaha", "scottsbluff", "elko", "lasvegas", "reno", "nh", "cnj", "jerseyshore", "newjersey", "southjersey", "albuquerque", "clovis", "farmington", "lascruces", "roswell", "santafe", "albany", "binghamton", "buffalo", "catskills", "chautauqua", "elmira", "fingerlakes", "glensfalls", "hudsonvalley", "ithaca", "longisland", "newyork", "oneonta", "plattsburgh", "potsdam", "rochester", "syracuse", "twintiers", "utica", "watertown", "asheville", "boone", "charlotte", "eastnc", "fayetteville", "greensboro", "hickory", "onslow", "outerbanks", "raleigh", "wilmington", "winstonsalem", "bismarck", "fargo", "grandforks", "nd", "akroncanton", "ashtabula", "athensohio", "chillicothe", "cincinnati", "cleveland", "columbus", "dayton", "limaohio", "mansfield", "sandusky", "toledo", "tuscarawas", "youngstown", "zanesville", "lawton", "enid", "oklahomacity", "stillwater", "tulsa", "bend", "corvallis", "eastoregon", "eugene", "klamath", "medford", "oregoncoast", "portland", "roseburg", "salem", "altoona", "chambersburg", "erie", "harrisburg", "lancaster", "allentown", "meadville", "philadelphia", "pittsburgh", "poconos", "reading", "scranton", "pennstate", "williamsport", "york", "providence", "charleston", "columbia", "florencesc", "greenville", "hiltonhead", "myrtlebeach", "nesd", "csd", "rapidcity", "siouxfalls", "sd", "chattanooga", "clarksville", "cookeville", "jacksontn", "knoxville", "memphis", "nashville", "tricities", "abilene", "amarillo", "austin", "beaumont", "brownsville", "collegestation", "corpuschristi", "dallas", "nacogdoches", "delrio", "elpaso", "galveston", "houston", "killeen", "laredo", "lubbock", "mcallen", "odessa", "sanangelo", "sanantonio", "sanmarcos", "bigbend", "texoma", "easttexas", "victoriatx", "waco", "wichitafalls", "logan", "ogden", "provo", "saltlakecity", "stgeorge", "vermont", "charlottesville", "danville", "fredericksburg", "norfolk", "harrisonburg", "lynchburg", "blacksburg", "richmond", "roanoke", "swva", "winchester", "bellingham", "kpr", "moseslake", "olympic", "pullman", "seattle", "skagit", "spokane", "wenatchee", "yakima", "charlestonwv", "martinsburg", "huntington", "morgantown", "wheeling", "parkersburg", "swv", "wv", "appleton", "eauclaire", "greenbay", "janesville", "racine", "lacrosse", "madison", "milwaukee", "northernwi", "sheboygan", "wausau", "wyoming", "micronesia", "puertorico", "virgin"}
@@ -34,28 +41,85 @@ func getRequest(rawUrl string, c *colly.Context) *colly.Request {
 	return &request
 
 }
+func scrapeTestCL( w http.ResponseWriter, r *http.Request) {
 
-func scrapeCL(stateCodes []string, w http.ResponseWriter, r *http.Request) {
 
-	//q.AddURL()
-	//q.AddURL()
-	//conn, _ := upgrader.Upgrade(w, r, nil)
-	//var socks5ADDRS []string
-	////stooges := [...]string{}
-	//for i := 1200; i < 1220; i++ {
-	//	sock5URL := fmt.Sprintf("socks5://127.0.0.1:%d",i)
-	//	socks5ADDRS = append(socks5ADDRS,sock5URL)
+	con, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		panic(err)
+	}
+	con.WriteJSON(scrape.SocketMessage{MessageType: "listingPercentComplete", Payload: "100"})
+	for _,l := range listings{
+		con.WriteJSON(scrape.SocketMessage{MessageType: "listings", Payload: l})
+	}
+	//for i, _ := range internal.StateCodes {
+	//	percentComplete := fmt.Sprintf("%f", (float64(i)/float64(len(stateCodes)))*100)
 	//}
+
+}
+func scrapeCL( w http.ResponseWriter, r *http.Request) {
+	cScrape := scrape.CollyScrape{
+		ActiveRequestMap:    make(map[string]time.Time),
+		CompletedRequestMap: make(map[string]time.Duration),
+	}
+	cScrape.BuildCollector()
+
+	con, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	cScrape.U = con
+	startTime := time.Now()
+	//	emailString := r.FindString(string(htmlData))
+	//	listing.Email = strings.Trim(emailString, ":")
+	for i, state := range internal.StateCodes {
+		stateOrg := fmt.Sprintf("https://%s.craigslist.org", state)
+		cScrape.C.Visit(fmt.Sprintf("%s/d/software-qa-dba-etc/search/sof", stateOrg))
+		cScrape.C.Wait()
+		cScrape.C.Visit(fmt.Sprintf("%s/search/sof?employment_type=3", stateOrg))
+		cScrape.C.Wait()
+		percentComplete := fmt.Sprintf("%f", (float64(i)/float64(len(stateCodes)))*100)
+		con.WriteJSON(scrape.SocketMessage{MessageType: "listingPercentComplete", Payload: percentComplete})
+	}
+	//contactInfo := scrape.GetContactInfoURL(listing)
+	//if contactInfo == "" {
+	//	body := map[string]string{"status": fmt.Sprintf("%d",http.StatusBadRequest),"statusText":http.StatusText(http.StatusBadRequest),"error": "no contact info for link"}
+	//	c.JSON(http.StatusBadRequest,body)
+	//	return
+	//}
+	//contactInfos := scrape.GetContactInfos()
+	//fmt.Println(len(contactInfos))
+	//for _, contactURL := range contactInfos {
+	//	infoRESP, err := http.Get(contactURL)
+	//	htmlData, err := ioutil.ReadAll(infoRESP.Body)
+	//	if err != nil {
+	//		jsonListing, _ := json.Marshal(listing)
+	//		body := map[string]string{"status": fmt.Sprintf("%d", http.StatusBadRequest),
+	//			"statusText": http.StatusText(http.StatusBadRequest),
+	//			"body":       string(jsonListing)}
+	//		c.JSON(http.StatusBadRequest, body)
+	//		return
+	//	}
 	//
-	////v := map[string]string{}
-	////colly.ProxyFunc()
-	////proxy.RoundRobinProxySwitcher()
-	//rp, err := scrape.CustomProxy(socks5ADDRS)
-
-	//if err != nil {
-	//	log.Fatal(err)
 	//}
-	//collector.SetProxyFunc(rp)
+	//listing.ContactInfoUrl = contactInfo
+	//r, _ := regexp.Compile(":([a-zA-Z0-9])+@job.craigslist.org")
+	//
+	////
+	////
+	//if err != nil {
+	//	jsonListing, _ := json.Marshal(listing)
+	//	body := map[string]string{"status": fmt.Sprintf("%d",http.StatusBadRequest),
+	//		"statusText":http.StatusText(http.StatusBadRequest),
+	//		"body": string(jsonListing)}
+	//	c.JSON(http.StatusBadRequest,body)
+	//	return
+	//}
+	totalTime := time.Now().Sub(startTime)
+	fmt.Println(totalTime.Seconds())
+	fmt.Println(len(cScrape.ListingURLS))
+
 
 }
 
@@ -82,33 +146,80 @@ func buildEmail(email string, url string) gmail.Message {
 
 func main() {
 
-	c := scrape.BuildCollector()
 
-	for _, state := range stateCodes {
-		stateOrg := fmt.Sprintf("https://%s.craigslist.org", state)
-		time.Sleep(10 * time.Millisecond)
-		c.Visit(fmt.Sprintf("%s/d/software-qa-dba-etc/search/sof", stateOrg))
-		//c.Wait()
-		//time.Sleep(10 * time.Millisecond)
-		//c.Visit(fmt.Sprintf("%s/search/sof?employment_type=3", stateOrg))
-		//c.Wait()
+
+	f, err := os.Open("/Users/joejackson/dev/craigslist-auto-apply/config/listings.json")
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+	err = json.NewDecoder(f).Decode(&listings)
+	if err != nil {
+		panic(err)
 	}
 
-	contactInfos := scrape.GetContactInfos()
-	fmt.Println(len(contactInfos))
-	//for _, contactURL := range contactInfos {
-	//	infoRESP, err := http.Get(contactURL)
-	//	htmlData, err := ioutil.ReadAll(infoRESP.Body)
-	//	if err != nil {
-	//		jsonListing, _ := json.Marshal(listing)
-	//		body := map[string]string{"status": fmt.Sprintf("%d", http.StatusBadRequest),
-	//			"statusText": http.StatusText(http.StatusBadRequest),
-	//			"body":       string(jsonListing)}
-	//		c.JSON(http.StatusBadRequest, body)
-	//		return
-	//	}
+	server, err := socketio.NewServer(nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	server.OnConnect("/", func(s socketio.Conn) error {
+		s.SetContext("")
+		fmt.Println("connected:", s.ID())
+		return nil
+	})
+	server.OnEvent("/", "notice", func(s socketio.Conn, msg string) {
+		fmt.Println("notice:", msg)
+		s.Emit("reply", "have "+msg)
+	})
+	server.OnEvent("/test_scrape", "test_scrape", func(s socketio.Conn) string {
+		s.SetContext("test_scrape")
+		return "recv " + msg
+	})
+	server.OnEvent("/", "bye", func(s socketio.Conn) string {
+		last := s.Context().(string)
+		s.Emit("bye", last)
+		s.Close()
+		return last
+	})
+	server.OnError("/", func(s socketio.Conn, e error) {
+		fmt.Println("meet error:", e)
+	})
+	server.OnDisconnect("/", func(s socketio.Conn, reason string) {
+		fmt.Println("closed", reason)
+	})
+	go server.Serve()
+	defer server.Close()
+
+	http.Handle("/socket.io/", server)
+	log.Println("Serving at localhost:8000...")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+
+
+
+	//gin.SetMode(gin.DebugMode)
+	//r := gin.New()
+	//r.Use(cors.Default())
+	//r.Use(gin.Logger())
+	//r.Use(gin.Recovery())
+	//r.GET("/scrape", func(c *gin.Context) {scrapeCL(c.Writer, c.Request)})
+	//r.GET("/scrape_test", func(c *gin.Context) {scrapeTestCL(c.Writer, c.Request)})
+	//r.Run()
+
+
+	//})
+	//c := scrape.BuildCollector()
 	//
+	//for _, state := range stateCodes {
+	//	stateOrg := fmt.Sprintf("https://%s.craigslist.org", state)
+	//	time.Sleep(10 * time.Millisecond)
+	//	c.Visit(fmt.Sprintf("%s/d/software-qa-dba-etc/search/sof", stateOrg))
+	//	//c.Wait()
+	//	//time.Sleep(10 * time.Millisecond)
+	//	//c.Visit(fmt.Sprintf("%s/search/sof?employment_type=3", stateOrg))
+	//	//c.Wait()
 	//}
+
+
 
 	//
 	//if htmlData == nil {
@@ -135,35 +246,10 @@ func main() {
 }
 
 //c.Wait()
-//ctx := context.Background()
 //
-//b, err := ioutil.ReadFile("/Users/joejackson/GolandProjects/scraper/cmd/craigslistAPI/credentials.json")
-//if err != nil {
-//	log.Fatalf("Unable to read client secret file: %v", err)
-//}
-//
-//config, err := google.ConfigFromJSON(b, gmail.MailGoogleComScope)
-//if err != nil {
-//	log.Fatalf("Unable to parse client secret file to config: %v", err)
-//}
-//client := email.GetClient(ctx, config)
-//
-//srv, err := gmail.New(client)
-//if err != nil {
-//	log.Fatalf("Unable to retrieve gmail Client %v", err)
-//}
 
-//gin.SetMode(gin.DebugMode)
-//r := gin.New()
-//r.Use(cors.Default())
-//r.Use(gin.Logger())
-//r.Use(gin.Recovery())
-//
-//r.GET("/scrape", func(c *gin.Context) {
-//
-//	scrapeCL(stateCodes,c.Writer, c.Request)
-//
-//})
+
+
 //r.POST("/sendEmail", func(c *gin.Context) {
 //
 //
@@ -176,26 +262,7 @@ func main() {
 //	}
 //
 //
-//	contactInfo := scrape.GetContactInfoURL(listing)
-//	if contactInfo == "" {
-//		body := map[string]string{"status": fmt.Sprintf("%d",http.StatusBadRequest),"statusText":http.StatusText(http.StatusBadRequest),"error": "no contact info for link"}
-//		c.JSON(http.StatusBadRequest,body)
-//		return
-//	}
-//
-//	listing.ContactInfoUrl = contactInfo
-//	r, _ := regexp.Compile(":([a-zA-Z0-9])+@job.craigslist.org")
 
-//
-//
-//	if err != nil {
-//		jsonListing, _ := json.Marshal(listing)
-//		body := map[string]string{"status": fmt.Sprintf("%d",http.StatusBadRequest),
-//			"statusText":http.StatusText(http.StatusBadRequest),
-//			"body": string(jsonListing)}
-//		c.JSON(http.StatusBadRequest,body)
-//		return
-//	}
 //
 //
 //	if infoRESP == nil {
@@ -218,9 +285,7 @@ func main() {
 //		return
 //	}
 //
-//	emailString := r.FindString(string(htmlData))
-//
-//	listing.Email = strings.Trim(emailString, ":")
+
 //
 //
 //	if listing.Email  != ""{

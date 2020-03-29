@@ -1,8 +1,8 @@
 package ticket_test
 
 import (
-	"craigslist-auto-apply/internal/mocksnal/mocks"
-	"craigslist-auto-apply/internal/ticketal/ticket"
+	"craigslist-auto-apply/internal/mocks"
+	"craigslist-auto-apply/internal/ticket"
 	"testing"
 
 	"github.com/golang/mock/gomock"
